@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="forest">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lantapan Hub — Signal Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ============ THEMES ============
+     Every theme defines the same token set. Add one by copying a block
+     and registering it in the THEMES array in the script below. */
+
+  /* Forest — original dark green */
+  html[data-theme="forest"] {
+    --bg: #0d1512;         --panel: #131e19;      --panel-2: #182a22;
+    --line: #24382e;       --ink: #e8f2ec;        --muted: #7fa08e;
+    --dim: #4f6b5c;        --signal: #4ade80;     --signal-2: #2c9e56;
+    --warn: #fbbf24;       --down: #f87171;       --accent: #38bdf8;
+    --glow-1: rgba(56,189,248,0.05);              --glow-2: rgba(74,222,128,0.05);
+    --gauge-track: #22332b; --gauge-a: #38bdf8;   --gauge-b: #4ade80;
+    --gauge-glow: rgba(74,222,128,0.45);
+    --needle-a: #ffffff;   --needle-b: #55665e;
+    --tick: #3a5648;       --tick-major: #6f8d7c; --gauge-label: #7d9c8b;
+    --needle-shadow: rgba(0,0,0,0.5);
+  }
+
+  /* Midnight — Speedtest-style near black with a cyan sweep */
+  html[data-theme="midnight"] {
+    --bg: #04060c;         --panel: #0c1120;      --panel-2: #141b2e;
+    --line: #212a44;       --ink: #eaf2ff;        --muted: #8fa3c8;
+    --dim: #56658a;        --signal: #22d3ee;     --signal-2: #1d63c9;
+    --warn: #fbbf24;       --down: #fb7185;       --accent: #60a5fa;
+    --glow-1: rgba(59,130,246,0.10);              --glow-2: rgba(34,211,238,0.07);
+    --gauge-track: #2b3157; --gauge-a: #22d3ee;   --gauge-b: #2563eb;
+    --gauge-glow: rgba(34,211,238,0.5);
+    --needle-a: #f1f5f9;   --needle-b: #3c4356;
+    --tick: #2b3157;       --tick-major: #94a3b8; --gauge-label: #9fb0cf;
+    --needle-shadow: rgba(0,0,0,0.6);
+  }
+
+  /* Daylight — light mode */
+  html[data-theme="daylight"] {
+    --bg: #f2f5f4;         --panel: #ffffff;      --panel-2: #f5f8f7;
+    --line: #dfe7e3;       --ink: #10201a;        --muted: #5a7468;
+    --dim: #8ba396;        --signal: #12a150;     --signal-2: #0b7a3c;
+    --warn: #b45309;       --down: #dc2626;       --accent: #0284c7;
+    --glow-1: rgba(2,132,199,0.07);               --glow-2: rgba(18,161,80,0.07);
+    --gauge-track: #e2e9e6; --gauge-a: #0ea5e9;   --gauge-b: #12a150;
+    --gauge-glow: rgba(18,161,80,0.28);
+    --needle-a: #334155;   --needle-b: #cbd5e1;
+    --tick: #cdd9d3;       --tick-major: #7b9689; --gauge-label: #648073;
+    --needle-shadow: rgba(15,23,42,0.18);
+  }
+
+  /* Ember — warm dark amber */
+  html[data-theme="ember"] {
+    --bg: #120e0a;         --panel: #1c1611;      --panel-2: #261d15;
+    --line: #3a2b1e;       --ink: #f7ece0;        --muted: #b3947a;
+    --dim: #7a6250;        --signal: #f59e0b;     --signal-2: #c2410c;
+    --warn: #fde047;       --down: #ef4444;       --accent: #fb923c;
+    --glow-1: rgba(251,146,60,0.07);              --glow-2: rgba(245,158,11,0.06);
+    --gauge-track: #35281c; --gauge-a: #fbbf24;   --gauge-b: #ea580c;
+    --gauge-glow: rgba(245,158,11,0.45);
+    --needle-a: #fff7ed;   --needle-b: #6b5340;
+    --tick: #4a382a;       --tick-major: #a98a6c; --gauge-label: #b39678;
+    --needle-shadow: rgba(0,0,0,0.5);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    background-image:
+      radial-gradient(circle at 20% 0%, var(--glow-1), transparent 40%),
+      radial-gradient(circle at 90% 100%, var(--glow-2), transparent 45%);
+    color: var(--ink);
+    font-family: 'Space Grotesk', sans-serif;
+    min-height: 100vh;
+    padding: 24px 16px 48px;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 0.35s ease, color 0.35s ease;
+  }
+
+  .wrap { max-width: 1080px; margin: 0 auto; }
+
+  /* Header */
+  .topbar {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap; margin-bottom: 28px;
+    padding-bottom: 20px; border-bottom: 1px solid var(--line);
+  }
+  .topbar-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .brand-title { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.1; }
+  .brand-sub { color: var(--muted); font-size: 13px; margin-top: 6px; }
+
+  .live {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--muted);
+    background: var(--panel); border: 1px solid var(--line);
+    padding: 8px 14px; border-radius: 999px;
+  }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--signal);
+    box-shadow: 0 0 0 0 var(--gauge-glow); animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 var(--gauge-glow); }
+    70%  { box-shadow: 0 0 0 8px transparent; }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
+
+  /* Theme switcher */
+  .themebar {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--panel); border: 1px solid var(--line);
+    padding: 6px; border-radius: 999px;
+  }
+  .themebar .tlabel {
+    font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--dim); padding: 0 4px 0 8px;
+  }
+  .swatch {
+    width: 26px; height: 26px; border-radius: 50%; cursor: pointer; padding: 0;
+    border: 1px solid var(--line); position: relative; overflow: hidden;
+    background: none; transition: transform 0.18s ease, box-shadow 0.18s ease;
+  }
+  .swatch::before, .swatch::after { content: ""; position: absolute; top: 0; bottom: 0; width: 50%; }
+  .swatch::before { left: 0;  background: var(--sw-bg); }
+  .swatch::after  { right: 0; background: linear-gradient(180deg, var(--sw-a), var(--sw-b)); }
+  .swatch:hover { transform: translateY(-1px); }
+  .swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--signal); }
+  .swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  /* Grid */
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(12, 1fr); }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 16px; padding: 22px;
+    position: relative; overflow: hidden;
+    transition: background-color 0.35s ease, border-color 0.35s ease;
+  }
+  .card-label {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--dim); margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .span-4 { grid-column: span 4; }
+  .span-8 { grid-column: span 8; }
+  .span-6 { grid-column: span 6; }
+  .span-3 { grid-column: span 3; }
+
+  /* Status card */
+  .status-card { display: flex; flex-direction: column; }
+  .status-main { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+  .status-ring {
+    width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0;
+    display: grid; place-items: center; position: relative;
+    border: 2px solid var(--signal); color: var(--signal);
+  }
+  .status-ring.down { border-color: var(--down); color: var(--down); }
+  .status-ring svg { width: 26px; height: 26px; }
+  .status-word { font-size: 22px; font-weight: 700; line-height: 1; }
+  .status-word.down { color: var(--down); }
+  .status-note { color: var(--muted); font-size: 13px; margin-top: 5px; }
+  .status-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border-radius: 10px; overflow: hidden; margin-top: auto; }
+  .status-meta div { background: var(--panel-2); padding: 12px 14px; }
+  .status-meta .k { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
+  .status-meta .v { font-size: 15px; font-weight: 600; margin-top: 3px; font-family: 'IBM Plex Mono', monospace; }
+
+  /* ============ ANGLE GAUGE (Speedtest-style) ============ */
+  .angle-card { display: flex; flex-direction: column; align-items: center; }
+  .gauge { position: relative; width: 100%; max-width: 272px; }
+  .gauge svg { width: 100%; height: auto; display: block; overflow: visible; }
+
+  .g-track { stroke: var(--gauge-track); }
+  .g-active {
+    stroke: url(#gaugeGrad);
+    filter: drop-shadow(0 0 7px var(--gauge-glow));
+    transition: stroke-dashoffset 1.1s cubic-bezier(.34,1.2,.5,1);
+  }
+  #gaugeGrad .stop-a { stop-color: var(--gauge-a); }
+  #gaugeGrad .stop-b { stop-color: var(--gauge-b); }
+  #needleGrad .stop-a { stop-color: var(--needle-a); }
+  #needleGrad .stop-b { stop-color: var(--needle-b); }
+
+  .g-tick { stroke: var(--tick); }
+  .g-tick.major { stroke: var(--tick-major); }
+  .g-num {
+    fill: var(--gauge-label); font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px; font-weight: 600; transition: fill 0.5s ease;
+  }
+  .g-num.hot { fill: var(--ink); }
+
+  .needle {
+    transform-box: view-box; transform-origin: 110px 110px;
+    transition: transform 1.1s cubic-bezier(.34,1.2,.5,1);
+    filter: drop-shadow(0 2px 5px var(--needle-shadow));
+  }
+  .needle-hub { fill: var(--panel-2); stroke: var(--needle-b); stroke-width: 2; }
+
+  .angle-readout { text-align: center; margin-top: -18px; }
+  .angle-num {
+    font-family: 'IBM Plex Mono', monospace; font-size: 44px; font-weight: 600;
+    line-height: 1; letter-spacing: -0.02em;
+  }
+  .angle-num .deg { font-size: 22px; color: var(--muted); }
+  .angle-unit {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 8px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--signal);
+  }
+  .angle-unit svg { width: 14px; height: 14px; }
+  .angle-best {
+    margin-top: 14px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--muted);
+    background: var(--panel-2); border: 1px solid var(--line); padding: 7px 14px; border-radius: 999px;
+  }
+  .angle-best b { color: var(--signal); }
+
+  /* Signal card */
+  .sig-card { display: flex; flex-direction: column; }
+  .sig-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+  .sig-num { font-family: 'IBM Plex Mono', monospace; font-size: 48px; font-weight: 600; line-height: 0.9; }
+  .sig-unit { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.12em; color: var(--dim); margin-top: 6px; text-transform: uppercase; }
+  .sig-pill {
+    font-size: 12px; font-family: 'IBM Plex Mono', monospace; padding: 5px 12px;
+    border-radius: 999px; font-weight: 600;
+    background: color-mix(in srgb, var(--signal) 14%, transparent);
+    color: var(--signal);
+    border: 1px solid color-mix(in srgb, var(--signal) 32%, transparent);
+  }
+  .bars { display: flex; align-items: flex-end; gap: 8px; flex: 1; min-height: 120px; }
+  .bars i {
+    flex: 1; background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px 5px 0 0;
+    transition: background 0.4s, border-color 0.4s;
+  }
+  .bars i.on { background: linear-gradient(180deg, var(--signal), var(--signal-2)); border-color: transparent; }
+  .bars i:nth-child(1){height:35%} .bars i:nth-child(2){height:52%}
+  .bars i:nth-child(3){height:68%} .bars i:nth-child(4){height:84%}
+  .bars i:nth-child(5){height:100%}
+  .sig-scale {
+    display: flex; justify-content: space-between; margin-top: 12px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--dim); padding-top: 10px; border-top: 1px solid var(--line);
+  }
+
+  /* small stat cards */
+  .stat .v { font-family: 'IBM Plex Mono', monospace; font-size: 24px; font-weight: 600; }
+  .stat .u { font-size: 13px; color: var(--muted); }
+  .stat .sub { font-size: 12px; color: var(--dim); margin-top: 6px; font-family: 'IBM Plex Mono', monospace; }
+
+  footer {
+    margin-top: 28px; text-align: center; font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px; color: var(--dim); letter-spacing: 0.1em;
+  }
+
+  @media (max-width: 860px) {
+    .span-8, .span-6, .span-4 { grid-column: span 12; }
+    .span-3 { grid-column: span 6; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="topbar">
+    <div>
+      <div class="brand-title">Signal Monitor</div>
+      <div class="brand-sub">Arduino-based signal mapping &amp; boosting</div>
+    </div>
+    <div class="topbar-right">
+      <div class="themebar" id="themebar" role="group" aria-label="Color theme">
+        <span class="tlabel">Theme</span>
+      </div>
+      <div class="live"><span class="dot"></span> LIVE · <span id="clock">--:--:--</span></div>
+    </div>
+  </header>
+
+  <div class="grid">
+
+    <!-- STATUS CARD -->
+    <section class="card status-card span-4">
+      <div class="card-label">Connection Status</div>
+      <div class="status-main">
+        <div class="status-ring" id="statusRing">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>
+          </svg>
+        </div>
+        <div>
+          <div class="status-word" id="statusWord">CONNECTED</div>
+          <div class="status-note" id="statusNote">Hub online via Globe network</div>
+        </div>
+      </div>
+      <div class="status-meta">
+        <div><div class="k">Network</div><div class="v" id="mNet">Globe</div></div>
+        <div><div class="k">SIM</div><div class="v" id="mSim">READY</div></div>
+        <div><div class="k">Public IP</div><div class="v" id="mIp">10.123.45.67</div></div>
+        <div><div class="k">Quality</div><div class="v" id="mQual">Strong</div></div>
+      </div>
+    </section>
+
+    <!-- ANGLE CARD -->
+    <section class="card angle-card span-4">
+      <div class="card-label" style="align-self:flex-start;">Antenna Angle</div>
+      <div class="gauge">
+        <svg viewBox="0 0 220 176" role="img" aria-labelledby="gaugeTitle">
+          <title id="gaugeTitle">Antenna angle gauge</title>
+          <defs>
+            <linearGradient id="gaugeGrad" x1="0" y1="1" x2="1" y2="0">
+              <stop class="stop-a" offset="0%"/><stop class="stop-b" offset="100%"/>
+            </linearGradient>
+            <linearGradient id="needleGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop class="stop-b" offset="0%"/><stop class="stop-a" offset="55%"/><stop class="stop-b" offset="100%"/>
+            </linearGradient>
+          </defs>
+
+          <!-- tick marks (generated by script) -->
+          <g id="ticks" stroke-linecap="round"></g>
+
+          <!-- arc track -->
+          <path class="g-track" d="M 41.19 158.18 A 84 84 0 1 1 178.81 158.18"
+                fill="none" stroke-width="17" stroke-linecap="round"/>
+          <!-- arc active -->
+          <path id="arcActive" class="g-active" d="M 41.19 158.18 A 84 84 0 1 1 178.81 158.18"
+                fill="none" stroke-width="17" stroke-linecap="round"
+                stroke-dasharray="366.52 600" stroke-dashoffset="366.52"/>
+
+          <!-- scale numbers, inside the arc (generated by script) -->
+          <g id="gaugeNums"></g>
+
+          <!-- needle -->
+          <g id="needleG" class="needle">
+            <path d="M 104.6 112 L 108.3 64 Q 110 60 111.7 64 L 115.4 112 Z" fill="url(#needleGrad)"/>
+            <circle class="needle-hub" cx="110" cy="110" r="9"/>
+          </g>
+        </svg>
+      </div>
+      <div class="angle-readout">
+        <div class="angle-num"><span id="angleVal">135</span><span class="deg">°</span></div>
+        <div class="angle-unit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/>
+          </svg>
+          Servo
+        </div>
+      </div>
+      <div class="angle-best">best lock at <b id="bestAngle">135°</b> · signal <b id="bestSig">27</b></div>
+    </section>
+
+    <!-- SIGNAL CARD -->
+    <section class="card sig-card span-4">
+      <div class="card-label">Signal Strength</div>
+      <div class="sig-top">
+        <div>
+          <div class="sig-num" id="sigNum">27</div>
+          <div class="sig-unit">CSQ / 31</div>
+        </div>
+        <div class="sig-pill" id="sigQuality">Strong</div>
+      </div>
+      <div class="bars" id="bars">
+        <i></i><i></i><i></i><i></i><i></i>
+      </div>
+      <div class="sig-scale">
+        <span>Weak</span><span>Fair</span><span>Good</span><span>Strong</span>
+      </div>
+    </section>
+
+    <!-- MINI STATS -->
+    <section class="card stat span-3">
+      <div class="card-label">Best Signal</div>
+      <div><span class="v" id="statBestSig">27</span></div>
+      <div class="sub">peak recorded</div>
+    </section>
+    <section class="card stat span-3">
+      <div class="card-label">Best Angle</div>
+      <div><span class="v" id="statBestAng">135</span><span class="u">°</span></div>
+      <div class="sub">servo position</div>
+    </section>
+    <section class="card stat span-3">
+      <div class="card-label">Network</div>
+      <div><span class="v" id="statNet">Globe</span></div>
+      <div class="sub">carrier lock</div>
+    </section>
+    <section class="card stat span-3">
+      <div class="card-label">SIM State</div>
+      <div><span class="v" id="statSim">READY</span></div>
+      <div class="sub">module status</div>
+    </section>
+
+  </div>
+
+  <footer>ARDUINO-BASED PORTABLE INTERNET HUB · SIGNAL MAPPING v1.0 · LANTAPAN NHS-SHS</footer>
+</div>
+
+<script>
+  /* ================= THEME SWITCHER ================= */
+  const THEMES = [
+    { id: 'forest',   name: 'Forest',   bg: '#0d1512', a: '#38bdf8', b: '#4ade80' },
+    { id: 'midnight', name: 'Midnight', bg: '#04060c', a: '#22d3ee', b: '#2563eb' },
+    { id: 'daylight', name: 'Daylight', bg: '#f2f5f4', a: '#0ea5e9', b: '#12a150' },
+    { id: 'ember',    name: 'Ember',    bg: '#120e0a', a: '#fbbf24', b: '#ea580c' }
+  ];
+  const STORE_KEY = 'hub-theme';
+
+  function applyTheme(id) {
+    document.documentElement.setAttribute('data-theme', id);
+    try { localStorage.setItem(STORE_KEY, id); } catch (e) { /* private mode */ }
+    document.querySelectorAll('.swatch').forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.theme === id));
+    });
+  }
+
+  (function buildThemeBar() {
+    const bar = document.getElementById('themebar');
+    THEMES.forEach(function (t) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'swatch';
+      b.dataset.theme = t.id;
+      b.title = t.name;
+      b.setAttribute('aria-label', t.name + ' theme');
+      b.style.setProperty('--sw-bg', t.bg);
+      b.style.setProperty('--sw-a', t.a);
+      b.style.setProperty('--sw-b', t.b);
+      b.addEventListener('click', function () { applyTheme(t.id); });
+      bar.appendChild(b);
+    });
+    let saved = null;
+    try { saved = localStorage.getItem(STORE_KEY); } catch (e) {}
+    if (!saved) {
+      saved = window.matchMedia('(prefers-color-scheme: light)').matches ? 'daylight' : 'forest';
+    }
+    applyTheme(THEMES.some(function (t) { return t.id === saved; }) ? saved : 'forest');
+  })();
+
+  /* ================= GAUGE GEOMETRY =================
+     250 degree sweep, open at the bottom.
+     Servo 0 sits at -125 deg, servo 180 at +125 deg. */
+  const CX = 110, CY = 110, R = 84;
+  const SWEEP = 250, START = -125;
+  const ARC_LEN = 2 * Math.PI * R * (SWEEP / 360);   // ~366.52
+
+  function pt(deg, r) {
+    const rad = deg * Math.PI / 180;
+    return [CX + r * Math.sin(rad), CY - r * Math.cos(rad)];
+  }
+
+  (function buildScale() {
+    const SVGNS = 'http://www.w3.org/2000/svg';
+
+    // minor + major ticks, just outside the arc
+    const ticks = document.getElementById('ticks');
+    for (let i = 0; i <= 20; i++) {
+      const major = i % 5 === 0;
+      const deg = START + (SWEEP * i / 20);
+      const a = pt(deg, major ? 96 : 97);
+      const b = pt(deg, major ? 106 : 102);
+      const l = document.createElementNS(SVGNS, 'line');
+      l.setAttribute('class', 'g-tick' + (major ? ' major' : ''));
+      l.setAttribute('x1', a[0].toFixed(2)); l.setAttribute('y1', a[1].toFixed(2));
+      l.setAttribute('x2', b[0].toFixed(2)); l.setAttribute('y2', b[1].toFixed(2));
+      l.setAttribute('stroke-width', major ? 2.4 : 1.4);
+      ticks.appendChild(l);
+    }
+
+    // scale numbers, inside the arc
+    const nums = document.getElementById('gaugeNums');
+    [0, 45, 90, 135, 180].forEach(function (v) {
+      const p = pt(START + (SWEEP * v / 180), 60);
+      const t = document.createElementNS(SVGNS, 'text');
+      t.setAttribute('class', 'g-num');
+      t.setAttribute('x', p[0].toFixed(2));
+      t.setAttribute('y', (p[1] + 4).toFixed(2));
+      t.setAttribute('text-anchor', 'middle');
+      t.dataset.val = v;
+      t.textContent = v;
+      nums.appendChild(t);
+    });
+  })();
+
+  function setGauge(angle) {
+    const frac = Math.max(0, Math.min(1, angle / 180));
+    document.getElementById('arcActive')
+      .setAttribute('stroke-dashoffset', (ARC_LEN * (1 - frac)).toFixed(2));
+    document.getElementById('needleG').style.transform =
+      'rotate(' + (START + SWEEP * frac).toFixed(2) + 'deg)';
+    // light up the scale numbers the needle has passed
+    document.querySelectorAll('#gaugeNums .g-num').forEach(function (t) {
+      t.classList.toggle('hot', Number(t.dataset.val) <= angle);
+    });
+  }
+
+  /* ================= DATA ================= */
+  // Incoming payload (matches your Arduino JSON)
+  let data = {
+    internet: true,
+    network: "Globe",
+    signal: 27,
+    signal_quality: "Strong",
+    servo_angle: 135,
+    best_angle: 135,
+    best_signal: 27,
+    sim: "READY",
+    ip: "10.123.45.67"
+  };
+
+  function qualityToBars(q) {
+    return ({ "No Signal":0, "Weak":2, "Fair":3, "Good":4, "Strong":5 })[q] ?? 3;
+  }
+
+  function render(d) {
+    // Status
+    const ring = document.getElementById('statusRing');
+    const word = document.getElementById('statusWord');
+    const note = document.getElementById('statusNote');
+    if (d.internet) {
+      ring.classList.remove('down'); word.classList.remove('down');
+      word.textContent = 'CONNECTED';
+      note.textContent = 'Hub online via ' + d.network + ' network';
+    } else {
+      ring.classList.add('down'); word.classList.add('down');
+      word.textContent = 'OFFLINE';
+      note.textContent = 'No internet, searching for signal';
+    }
+    document.getElementById('mNet').textContent  = d.network;
+    document.getElementById('mSim').textContent  = d.sim;
+    document.getElementById('mIp').textContent   = d.ip;
+    document.getElementById('mQual').textContent = d.signal_quality;
+
+    // Angle gauge
+    setGauge(d.servo_angle);
+    document.getElementById('angleVal').textContent = d.servo_angle;
+    document.getElementById('bestAngle').textContent = d.best_angle + '°';
+    document.getElementById('bestSig').textContent = d.best_signal;
+
+    // Signal
+    document.getElementById('sigNum').textContent = d.signal;
+    document.getElementById('sigQuality').textContent = d.signal_quality;
+    const on = qualityToBars(d.signal_quality);
+    document.querySelectorAll('#bars i').forEach(function (b, i) { b.classList.toggle('on', i < on); });
+
+    // Mini stats
+    document.getElementById('statBestSig').textContent = d.best_signal;
+    document.getElementById('statBestAng').textContent = d.best_angle;
+    document.getElementById('statNet').textContent = d.network;
+    document.getElementById('statSim').textContent = d.sim;
+  }
+
+  function clock() {
+    document.getElementById('clock').textContent =
+      new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
+  }
+
+  render(data);
+  clock();
+  setInterval(clock, 1000);
+
+  /* ---- Demo pulse: simulates the servo sweeping and signal drift.
+         Delete this block and call render() with your live fetch instead. ---- */
+  setInterval(function () {
+    const sweep = [45, 90, 135, 180, 135, 90];
+    data.servo_angle = sweep[Math.floor(Date.now() / 2500) % sweep.length];
+    const jitter = Math.max(5, Math.min(31, data.best_signal + Math.floor(Math.random() * 7 - 3)));
+    data.signal = jitter;
+    data.signal_quality = jitter >= 25 ? 'Strong' : jitter >= 18 ? 'Good' : jitter >= 12 ? 'Fair' : 'Weak';
+    render(data);
+  }, 2500);
+</script>
+</body>
+</html>
