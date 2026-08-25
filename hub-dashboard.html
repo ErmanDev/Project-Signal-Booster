@@ -121,6 +121,21 @@
     font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.16em;
     text-transform: uppercase; color: var(--dim); padding: 0 4px 0 8px;
   }
+  .btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 9px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;      
+    transition: border-color 0.2s ease, transform 0.2s ease;
+  }
+  .btn:hover { transform: translateY(-1px); border-color: var(--signal); }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .swatch {
     width: 26px; height: 26px; border-radius: 50%; cursor: pointer; padding: 0;
     border: 1px solid var(--line); position: relative; overflow: hidden;
@@ -274,10 +289,11 @@
       <div class="brand-sub">Arduino-based signal mapping &amp; boosting</div>
     </div>
     <div class="topbar-right">
+      <button class="btn" id="mqttBtn" type="button">Connect Cloud</button>
       <div class="themebar" id="themebar" role="group" aria-label="Color theme">
         <span class="tlabel">Theme</span>
       </div>
-      <div class="live"><span class="dot"></span> LIVE · <span id="clock">--:--:--</span></div>
+      <div class="live"><span class="dot"></span> LIVE · <span id="clock">--:--:--</span> · <span id="cloudState">DISCONNECTED</span></div>
     </div>
   </header>
 
@@ -399,6 +415,7 @@
   <footer>ARDUINO-BASED PORTABLE INTERNET HUB · SIGNAL MAPPING v1.0 · LANTAPAN NHS-SHS</footer>
 </div>
 
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <script>
   /* ================= THEME SWITCHER ================= */
   const THEMES = [
@@ -500,34 +517,53 @@
   /* ================= DATA ================= */
   // Incoming payload (matches your Arduino JSON)
   let data = {
-    internet: true,
-    network: "Globe",
-    signal: 27,
-    signal_quality: "Strong",
-    servo_angle: 135,
-    best_angle: 135,
-    best_signal: 27,
-    sim: "READY",
-    ip: "10.123.45.67"
+    internet: false,
+    network: "SIM Cellular",
+    signal: 0,
+    signal_quality: "No Signal",
+    servo_angle: 0,
+    best_angle: 0,
+    best_signal: 0,
+    sim: "UNKNOWN",
+    ip: "-"
   };
+  const CACHE_KEY = "hub-last-payload-v1";
+  const CLOUD_STALE_MS = 45000;
+  let lastPayloadAt = 0;
+  let mqttConnected = false;
+
+  function signalToQuality(value) {
+    if (value >= 25) return "Strong";
+    if (value >= 18) return "Good";
+    if (value >= 12) return "Fair";
+    if (value >= 0) return "Weak";
+    return "No Signal";
+  }
 
   function qualityToBars(q) {
     return ({ "No Signal":0, "Weak":2, "Fair":3, "Good":4, "Strong":5 })[q] ?? 3;
   }
 
   function render(d) {
+    const fresh = lastPayloadAt > 0 && (Date.now() - lastPayloadAt) <= CLOUD_STALE_MS;
+    const online = d.internet && fresh;
+
     // Status
     const ring = document.getElementById('statusRing');
     const word = document.getElementById('statusWord');
     const note = document.getElementById('statusNote');
-    if (d.internet) {
+    if (online) {
       ring.classList.remove('down'); word.classList.remove('down');
       word.textContent = 'CONNECTED';
-      note.textContent = 'Hub online via ' + d.network + ' network';
+      note.textContent = 'Hub online via ' + d.network + ' network · Last update ' + secondsAgo(lastPayloadAt) + 's ago';
     } else {
       ring.classList.add('down'); word.classList.add('down');
       word.textContent = 'OFFLINE';
-      note.textContent = 'No internet, searching for signal';
+      if (lastPayloadAt > 0) {
+        note.textContent = 'Telemetry stale for ' + secondsAgo(lastPayloadAt) + 's';
+      } else {
+        note.textContent = 'Waiting for cloud telemetry';
+      }
     }
     document.getElementById('mNet').textContent  = d.network;
     document.getElementById('mSim').textContent  = d.sim;
@@ -553,25 +589,153 @@
     document.getElementById('statSim').textContent = d.sim;
   }
 
+  function secondsAgo(timestampMs) {
+    return Math.max(0, Math.floor((Date.now() - timestampMs) / 1000));
+  }
+
+  function savePayloadCache() {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({
+        data: data,
+        received_at: lastPayloadAt
+      }));
+    } catch (e) {
+      // Ignore private mode / storage errors.
+    }
+  }
+
+  function restorePayloadCache() {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.data && typeof parsed.data === "object") {
+        data = Object.assign({}, data, parsed.data);
+      }
+      if (parsed && typeof parsed.received_at === "number") {
+        lastPayloadAt = parsed.received_at;
+      }
+    } catch (e) {
+      // Ignore malformed cache.
+    }
+  }
+
+  function updateCloudState() {
+    const cloudState = document.getElementById("cloudState");
+    if (!mqttConnected) {
+      cloudState.textContent = "DISCONNECTED";
+      return;
+    }
+    if (!lastPayloadAt) {
+      cloudState.textContent = "CONNECTED · NO DATA";
+      return;
+    }
+    cloudState.textContent = (Date.now() - lastPayloadAt <= CLOUD_STALE_MS) ? "CONNECTED · LIVE" : "CONNECTED · STALE";
+  }
+
   function clock() {
     document.getElementById('clock').textContent =
       new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
   }
 
+  restorePayloadCache();
   render(data);
+  updateCloudState();
   clock();
-  setInterval(clock, 1000);
-
-  /* ---- Demo pulse: simulates the servo sweeping and signal drift.
-         Delete this block and call render() with your live fetch instead. ---- */
   setInterval(function () {
-    const sweep = [45, 90, 135, 180, 135, 90];
-    data.servo_angle = sweep[Math.floor(Date.now() / 2500) % sweep.length];
-    const jitter = Math.max(5, Math.min(31, data.best_signal + Math.floor(Math.random() * 7 - 3)));
-    data.signal = jitter;
-    data.signal_quality = jitter >= 25 ? 'Strong' : jitter >= 18 ? 'Good' : jitter >= 12 ? 'Fair' : 'Weak';
+    clock();
     render(data);
-  }, 2500);
+    updateCloudState();
+  }, 1000);
+
+  /* ================= MQTT OVER INTERNET ================= */
+  const mqttBtn = document.getElementById('mqttBtn');
+  const MQTT_BROKER_URL = "ws://broker.emqx.io:8083/mqtt";
+  const MQTT_TOPIC = "signalbooster/hub1/status";
+  let mqttClient = null;
+
+  function applyIncomingPayload(payload) {
+    if (typeof payload.internet === "boolean") data.internet = payload.internet;
+    if (typeof payload.network === "string") data.network = payload.network;
+    if (typeof payload.signal === "number") data.signal = payload.signal;
+    if (typeof payload.signal_quality === "string") data.signal_quality = payload.signal_quality;
+    if (typeof payload.servo_angle === "number") data.servo_angle = payload.servo_angle;
+    if (typeof payload.best_angle === "number") data.best_angle = payload.best_angle;
+    if (typeof payload.best_signal === "number") data.best_signal = payload.best_signal;
+    if (typeof payload.sim === "string") data.sim = payload.sim;
+    if (typeof payload.ip === "string") data.ip = payload.ip;
+    lastPayloadAt = Date.now();
+    savePayloadCache();
+    render(data);
+    updateCloudState();
+  }
+
+  function disconnectMqtt() {
+    if (mqttClient) {
+      mqttClient.end(true);
+      mqttClient = null;
+    }
+    mqttConnected = false;
+    updateCloudState();
+    mqttBtn.textContent = "Connect Cloud";
+  }
+
+  function connectMqtt() {
+    mqttBtn.disabled = true;
+    mqttBtn.textContent = "Connecting...";
+
+    mqttClient = mqtt.connect(MQTT_BROKER_URL, {
+      reconnectPeriod: 3000,
+      clean: true,
+      connectTimeout: 10000
+    });
+
+    mqttClient.on("connect", function () {
+      mqttConnected = true;
+      mqttBtn.disabled = false;
+      mqttBtn.textContent = "Disconnect Cloud";
+      updateCloudState();
+      mqttClient.subscribe(MQTT_TOPIC, function (err) {
+        if (err) {
+          console.error("MQTT subscribe error:", err);
+        }
+      });
+    });
+
+    mqttClient.on("message", function (topic, message) {
+      if (topic !== MQTT_TOPIC) return;
+      try {
+        const payload = JSON.parse(String(message));
+        applyIncomingPayload(payload);
+      } catch (e) {
+        console.error("Invalid JSON payload:", e);
+      }
+    });
+
+    mqttClient.on("error", function (err) {
+      console.error("MQTT error:", err);
+      mqttConnected = false;
+      updateCloudState();
+      mqttBtn.disabled = false;
+      mqttBtn.textContent = "Connect Cloud";
+    });
+
+    mqttClient.on("close", function () {
+      mqttClient = null;
+      mqttConnected = false;
+      updateCloudState();
+      mqttBtn.disabled = false;
+      mqttBtn.textContent = "Connect Cloud";
+    });
+  }
+
+  mqttBtn.addEventListener("click", function () {
+    if (mqttClient && mqttClient.connected) {
+      disconnectMqtt();
+      return;
+    }
+    connectMqtt();
+  });
 </script>
 </body>
 </html>
