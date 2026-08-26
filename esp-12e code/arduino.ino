@@ -1,11 +1,17 @@
 #include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
+#include <PubSubClient.h>
 #include <Servo.h>
 
-const char* ssid = "SYSTEM";
-const char* password = "CHANGE_ME";
+const char* WIFI_SSID = "YOUR_WIFI_SSID";
+const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
 
-ESP8266WebServer server(80);
+const char* MQTT_BROKER = "broker.emqx.io";
+const int MQTT_PORT = 1883;
+const char* MQTT_STATUS_TOPIC = "signalbooster/hub1/status";
+const char* MQTT_COMMAND_TOPIC = "signalbooster/hub1/command";
+
+WiFiClient wifiClient;
+PubSubClient mqttClient(wifiClient);
 Servo servo;
 
 #define SERVO_PIN D4
@@ -13,62 +19,117 @@ Servo servo;
 int satellites = 8;
 int signalStrength = 80;
 int servoAngle = 90;
+int bestSignal = 0;
+int bestAngle = 90;
+bool manualMode = false;
 
-unsigned long lastUpdate = 0;
+const unsigned long PUBLISH_INTERVAL_MS = 3000;
+const unsigned long RECONNECT_INTERVAL_MS = 5000;
+unsigned long lastPublishMs = 0;
+unsigned long lastWifiAttemptMs = 0;
+unsigned long lastMqttAttemptMs = 0;
 
-void updateData() {
-  if (millis() - lastUpdate < 3000) {
-    return;
+String signalQuality() {
+  if (signalStrength >= 80) return "Strong";
+  if (signalStrength >= 60) return "Good";
+  if (signalStrength >= 40) return "Fair";
+  return "Weak";
+}
+
+void updateMockData() {
+  satellites = random(6, 13);
+  signalStrength = random(35, 101);
+
+  if (signalStrength > bestSignal) {
+    bestSignal = signalStrength;
+    bestAngle = servoAngle;
+  }
+}
+
+void applyServoAngle(int angle) {
+  servoAngle = constrain(angle, 0, 180);
+  servo.write(servoAngle);
+  Serial.print("Servo angle: ");
+  Serial.println(servoAngle);
+}
+
+void handleMqttCommand(char* topic, byte* payload, unsigned int length) {
+  String command;
+  for (unsigned int i = 0; i < length; i++) {
+    command += (char)payload[i];
   }
 
-  lastUpdate = millis();
-  satellites = random(6, 13);
-  signalStrength = random(65, 96);
-  servoAngle = random(0, 181);
-  servo.write(servoAngle);
+  if (command.indexOf("\"mode\":\"manual\"") >= 0 ||
+      command.indexOf("\"mode\": \"manual\"") >= 0) {
+    manualMode = true;
+  } else if (command.indexOf("\"mode\":\"auto\"") >= 0 ||
+             command.indexOf("\"mode\": \"auto\"") >= 0) {
+    manualMode = false;
+  }
 
-  Serial.println();
-  Serial.println("========== SYSTEM DATA ==========");
-  Serial.print("Satellites: ");
-  Serial.println(satellites);
-  Serial.print("Signal Strength: ");
-  Serial.print(signalStrength);
-  Serial.println("%");
-  Serial.println("Signal Status: GOOD SIGNAL");
-  Serial.print("Servo Angle: ");
-  Serial.print(servoAngle);
-  Serial.println(" degrees");
-  Serial.println("=================================");
+  int keyIndex = command.indexOf("servo_angle");
+  if (keyIndex >= 0) {
+    int colonIndex = command.indexOf(':', keyIndex);
+    if (colonIndex >= 0) {
+      applyServoAngle(command.substring(colonIndex + 1).toInt());
+    }
+  }
 }
 
-void addApiHeaders() {
-  server.sendHeader("Access-Control-Allow-Origin", "*");
-  server.sendHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
-  server.sendHeader("Access-Control-Allow-Private-Network", "true");
-  server.sendHeader("Cache-Control", "no-store");
+void connectWifi() {
+  if (WiFi.status() == WL_CONNECTED) return;
+  if (lastWifiAttemptMs != 0 &&
+      millis() - lastWifiAttemptMs < RECONNECT_INTERVAL_MS) return;
+
+  lastWifiAttemptMs = millis();
+  Serial.print("Connecting to WiFi: ");
+  Serial.println(WIFI_SSID);
+  WiFi.disconnect();
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 }
 
-void handleData() {
+void connectMqtt() {
+  if (WiFi.status() != WL_CONNECTED || mqttClient.connected()) return;
+  if (lastMqttAttemptMs != 0 &&
+      millis() - lastMqttAttemptMs < RECONNECT_INTERVAL_MS) return;
+
+  lastMqttAttemptMs = millis();
+  String clientId = "esp8266-signal-booster-" + String(ESP.getChipId(), HEX);
+
+  if (mqttClient.connect(clientId.c_str())) {
+    mqttClient.subscribe(MQTT_COMMAND_TOPIC);
+    Serial.println("MQTT connected.");
+  } else {
+    Serial.print("MQTT connection failed, state: ");
+    Serial.println(mqttClient.state());
+  }
+}
+
+void publishTelemetry() {
+  if (!mqttClient.connected()) return;
+
+  updateMockData();
+
   String json = "{";
-  json += "\"satellites\":" + String(satellites);
+  json += "\"internet\":true";
+  json += ",\"network\":\"" + WiFi.SSID() + "\"";
   json += ",\"signal\":" + String(signalStrength);
-  json += ",\"status\":\"GOOD SIGNAL\"";
-  json += ",\"angle\":" + String(servoAngle);
-  json += "}";
+  json += ",\"signal_quality\":\"" + signalQuality() + "\"";
+  json += ",\"servo_angle\":" + String(servoAngle);
+  json += ",\"best_angle\":" + String(bestAngle);
+  json += ",\"best_signal\":" + String(bestSignal);
+  json += ",\"satellites\":" + String(satellites);
+  json += ",\"sim\":\"N/A\"";
+  json += ",\"ip\":\"" + WiFi.localIP().toString() + "\"";
+  json += ",\"servo_mode\":\"";
+  json += (manualMode ? "manual" : "auto");
+  json += "\"}";
 
-  addApiHeaders();
-  server.send(200, "application/json", json);
-}
-
-void handleOptions() {
-  addApiHeaders();
-  server.send(204);
-}
-
-void handleNotFound() {
-  addApiHeaders();
-  server.send(404, "application/json", "{\"error\":\"Not found\"}");
+  if (mqttClient.publish(MQTT_STATUS_TOPIC, json.c_str(), true)) {
+    Serial.println(json);
+  } else {
+    Serial.println("Telemetry publish failed.");
+  }
 }
 
 void setup() {
@@ -76,34 +137,30 @@ void setup() {
   randomSeed(analogRead(A0));
 
   servo.attach(SERVO_PIN);
-  servo.write(servoAngle);
+  applyServoAngle(servoAngle);
 
-  WiFi.mode(WIFI_AP);
-  WiFi.softAP(ssid, password);
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(false);
 
-  Serial.println();
-  Serial.println("=================================");
-  Serial.println("       MONITORING SYSTEM");
-  Serial.println("=================================");
-  Serial.print("WiFi SSID: ");
-  Serial.println(ssid);
-  Serial.print("WiFi Password: ");
-  Serial.println(password);
-  Serial.print("API Address: http://");
-  Serial.print(WiFi.softAPIP());
-  Serial.println("/data");
-  Serial.println("Servo initialized.");
+  mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
+  mqttClient.setCallback(handleMqttCommand);
+  mqttClient.setBufferSize(512);
 
-  server.on("/data", HTTP_GET, handleData);
-  server.on("/data", HTTP_OPTIONS, handleOptions);
-  server.onNotFound(handleNotFound);
-  server.begin();
-
-  Serial.println("API server started.");
-  Serial.println("=================================");
+  connectWifi();
 }
 
 void loop() {
-  server.handleClient();
-  updateData();
+  connectWifi();
+  connectMqtt();
+  mqttClient.loop();
+
+  if (mqttClient.connected() &&
+      (lastPublishMs == 0 ||
+       millis() - lastPublishMs >= PUBLISH_INTERVAL_MS)) {
+    lastPublishMs = millis();
+    publishTelemetry();
+  }
+
+  delay(10);
 }
