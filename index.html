@@ -563,7 +563,7 @@
   // Incoming payload (matches your Arduino JSON)
   let data = {
     internet: false,
-    network: "SYSTEM AP",
+    network: "WiFi",
     signal: 0,
     signal_quality: "No Signal",
     servo_angle: 0,
@@ -578,7 +578,6 @@
   const CLOUD_STALE_MS = 45000;
   let lastPayloadAt = 0;
   let mqttConnected = false;
-  let localApiConnected = false;
   const modeAutoBtn = document.getElementById("modeAuto");
   const modeManualBtn = document.getElementById("modeManual");
   const servoManual = document.getElementById("servoManual");
@@ -673,10 +672,6 @@
 
   function updateCloudState() {
     const cloudState = document.getElementById("cloudState");
-    if (localApiConnected) {
-      cloudState.textContent = "LOCAL API · LIVE";
-      return;
-    }
     if (!mqttConnected) {
       cloudState.textContent = "DISCONNECTED";
       return;
@@ -710,7 +705,6 @@
   const MQTT_BROKER_URL = "wss://broker.emqx.io:8084/mqtt";
   const MQTT_TOPIC = "signalbooster/hub1/status";
   const MQTT_CMD_TOPIC = "signalbooster/hub1/command";
-  const LOCAL_API_URL = "http://192.168.4.1/data";
   let mqttClient = null;
   let lastManualAt = 0;
 
@@ -759,24 +753,6 @@
   }
 
   function applyIncomingPayload(payload) {
-    const isLocalApiPayload =
-      typeof payload.satellites === "number" &&
-      typeof payload.angle === "number";
-
-    if (isLocalApiPayload) {
-      data.internet = true;
-      data.network = "SYSTEM AP";
-      data.sim = "N/A";
-      data.ip = "192.168.4.1";
-      data.satellites = payload.satellites;
-      data.signal = payload.signal;
-      data.signal_quality = signalToQuality(Math.round(payload.signal / 100 * 31));
-      data.servo_angle = payload.angle;
-      data.best_angle = payload.angle;
-      data.best_signal = payload.signal;
-      data.servo_mode = "auto";
-    }
-
     if (typeof payload.internet === "boolean") data.internet = payload.internet;
     if (typeof payload.network === "string") data.network = payload.network;
     if (typeof payload.signal === "number") data.signal = payload.signal;
@@ -801,22 +777,6 @@
     updateCloudState();
   }
 
-  async function pollLocalApi() {
-    try {
-      const response = await fetch(LOCAL_API_URL, { cache: "no-store" });
-      if (!response.ok) throw new Error("HTTP " + response.status);
-      applyIncomingPayload(await response.json());
-      localApiConnected = true;
-      updateCloudState();
-    } catch (error) {
-      localApiConnected = false;
-      updateCloudState();
-    }
-  }
-
-  pollLocalApi();
-  setInterval(pollLocalApi, 1000);
-
   function disconnectMqtt() {
     if (mqttClient) {
       mqttClient.end(true);
@@ -831,6 +791,7 @@
     mqttBtn.disabled = true;
     mqttBtn.textContent = "Connecting...";
 
+    if (mqttClient) mqttClient.end(true);
     mqttClient = mqtt.connect(MQTT_BROKER_URL, {
       reconnectPeriod: 3000,
       clean: true,
@@ -869,7 +830,6 @@
     });
 
     mqttClient.on("close", function () {
-      mqttClient = null;
       mqttConnected = false;
       updateCloudState();
       mqttBtn.disabled = false;
@@ -896,6 +856,7 @@
   });
   modeAutoBtn.addEventListener("click", function () { sendServoMode("auto"); });
   modeManualBtn.addEventListener("click", function () { sendServoMode("manual"); });
+  connectMqtt();
 </script>
 </body>
 </html>
