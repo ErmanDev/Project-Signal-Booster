@@ -121,6 +121,21 @@
     font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.16em;
     text-transform: uppercase; color: var(--dim); padding: 0 4px 0 8px;
   }
+  .btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 9px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;      
+    transition: border-color 0.2s ease, transform 0.2s ease;
+  }
+  .btn:hover { transform: translateY(-1px); border-color: var(--signal); }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .swatch {
     width: 26px; height: 26px; border-radius: 50%; cursor: pointer; padding: 0;
     border: 1px solid var(--line); position: relative; overflow: hidden;
@@ -219,6 +234,36 @@
   }
   .angle-best b { color: var(--signal); }
 
+  .servo-manual {
+    width: 100%;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+  }
+  .servo-manual .card-label { margin-bottom: 10px; }
+  .servo-slider {
+    width: 100%;
+    accent-color: var(--signal);
+    cursor: pointer;
+  }
+  .servo-presets {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .servo-presets .btn { flex: 1; min-width: 48px; padding: 8px 6px; }
+  .mode-switch {
+    display: inline-flex; gap: 4px; margin-bottom: 10px;
+    background: var(--panel-2); border: 1px solid var(--line); padding: 4px; border-radius: 999px;
+  }
+  .mode-switch .btn { padding: 7px 12px; text-transform: none; letter-spacing: 0.04em; }
+  .mode-switch .btn[aria-pressed="true"] {
+    background: var(--signal); color: var(--bg); border-color: transparent;
+  }
+  .servo-manual.is-auto .servo-slider,
+  .servo-manual.is-auto .servo-presets { opacity: 0.38; pointer-events: none; }
+
   /* Signal card */
   .sig-card { display: flex; flex-direction: column; }
   .sig-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
@@ -274,10 +319,11 @@
       <div class="brand-sub">Arduino-based signal mapping &amp; boosting</div>
     </div>
     <div class="topbar-right">
+      <button class="btn" id="mqttBtn" type="button">Connect Cloud</button>
       <div class="themebar" id="themebar" role="group" aria-label="Color theme">
         <span class="tlabel">Theme</span>
       </div>
-      <div class="live"><span class="dot"></span> LIVE · <span id="clock">--:--:--</span></div>
+      <div class="live"><span class="dot"></span> LIVE · <span id="clock">--:--:--</span> · <span id="cloudState">DISCONNECTED</span></div>
     </div>
   </header>
 
@@ -352,6 +398,21 @@
         </div>
       </div>
       <div class="angle-best">best lock at <b id="bestAngle">135°</b> · signal <b id="bestSig">27</b></div>
+      <div class="servo-manual is-auto" id="servoManual">
+        <div class="card-label">Servo control</div>
+        <div class="mode-switch" role="group" aria-label="Servo mode">
+          <button type="button" class="btn" id="modeAuto" aria-pressed="true">Auto</button>
+          <button type="button" class="btn" id="modeManual" aria-pressed="false">Manual</button>
+        </div>
+        <input class="servo-slider" id="servoSlider" type="range" min="0" max="180" value="0" step="1" aria-label="Servo angle" disabled>
+        <div class="servo-presets">
+          <button type="button" class="btn servo-preset" data-angle="0" disabled>0°</button>
+          <button type="button" class="btn servo-preset" data-angle="45" disabled>45°</button>
+          <button type="button" class="btn servo-preset" data-angle="90" disabled>90°</button>
+          <button type="button" class="btn servo-preset" data-angle="135" disabled>135°</button>
+          <button type="button" class="btn servo-preset" data-angle="180" disabled>180°</button>
+        </div>
+      </div>
     </section>
 
     <!-- SIGNAL CARD -->
@@ -360,7 +421,7 @@
       <div class="sig-top">
         <div>
           <div class="sig-num" id="sigNum">27</div>
-          <div class="sig-unit">CSQ / 31</div>
+          <div class="sig-unit">Percent / 100</div>
         </div>
         <div class="sig-pill" id="sigQuality">Strong</div>
       </div>
@@ -389,9 +450,9 @@
       <div class="sub">carrier lock</div>
     </section>
     <section class="card stat span-3">
-      <div class="card-label">SIM State</div>
-      <div><span class="v" id="statSim">READY</span></div>
-      <div class="sub">module status</div>
+      <div class="card-label">Satellites</div>
+      <div><span class="v" id="statSatellites">--</span></div>
+      <div class="sub">currently visible</div>
     </section>
 
   </div>
@@ -399,6 +460,7 @@
   <footer>ARDUINO-BASED PORTABLE INTERNET HUB · SIGNAL MAPPING v1.0 · LANTAPAN NHS-SHS</footer>
 </div>
 
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <script>
   /* ================= THEME SWITCHER ================= */
   const THEMES = [
@@ -500,34 +562,59 @@
   /* ================= DATA ================= */
   // Incoming payload (matches your Arduino JSON)
   let data = {
-    internet: true,
-    network: "Globe",
-    signal: 27,
-    signal_quality: "Strong",
-    servo_angle: 135,
-    best_angle: 135,
-    best_signal: 27,
-    sim: "READY",
-    ip: "10.123.45.67"
+    internet: false,
+    network: "SYSTEM AP",
+    signal: 0,
+    signal_quality: "No Signal",
+    servo_angle: 0,
+    best_angle: 0,
+    best_signal: 0,
+    satellites: 0,
+    sim: "UNKNOWN",
+    ip: "-",
+    servo_mode: "auto"
   };
+  const CACHE_KEY = "hub-last-payload-v1";
+  const CLOUD_STALE_MS = 45000;
+  let lastPayloadAt = 0;
+  let mqttConnected = false;
+  let localApiConnected = false;
+  const modeAutoBtn = document.getElementById("modeAuto");
+  const modeManualBtn = document.getElementById("modeManual");
+  const servoManual = document.getElementById("servoManual");
+
+  function signalToQuality(value) {
+    if (value >= 25) return "Strong";
+    if (value >= 18) return "Good";
+    if (value >= 12) return "Fair";
+    if (value >= 0) return "Weak";
+    return "No Signal";
+  }
 
   function qualityToBars(q) {
     return ({ "No Signal":0, "Weak":2, "Fair":3, "Good":4, "Strong":5 })[q] ?? 3;
   }
 
   function render(d) {
+    const fresh = lastPayloadAt > 0 && (Date.now() - lastPayloadAt) <= CLOUD_STALE_MS;
+    const online = d.internet && fresh;
+
     // Status
     const ring = document.getElementById('statusRing');
     const word = document.getElementById('statusWord');
     const note = document.getElementById('statusNote');
-    if (d.internet) {
+    if (online) {
       ring.classList.remove('down'); word.classList.remove('down');
       word.textContent = 'CONNECTED';
-      note.textContent = 'Hub online via ' + d.network + ' network';
+      note.textContent = 'Hub online via ' + d.network + ' network · Last update ' + secondsAgo(lastPayloadAt) + 's ago';
     } else {
       ring.classList.add('down'); word.classList.add('down');
       word.textContent = 'OFFLINE';
-      note.textContent = 'No internet, searching for signal';
+      if (lastPayloadAt > 0) {
+        note.textContent = 'Telemetry stale for ' + secondsAgo(lastPayloadAt) + 's';
+      } else {
+        note.textContent = 'Waiting for cloud telemetry';
+      }
     }
     document.getElementById('mNet').textContent  = d.network;
     document.getElementById('mSim').textContent  = d.sim;
@@ -550,7 +637,55 @@
     document.getElementById('statBestSig').textContent = d.best_signal;
     document.getElementById('statBestAng').textContent = d.best_angle;
     document.getElementById('statNet').textContent = d.network;
-    document.getElementById('statSim').textContent = d.sim;
+    document.getElementById('statSatellites').textContent = d.satellites || '--';
+  }
+
+  function secondsAgo(timestampMs) {
+    return Math.max(0, Math.floor((Date.now() - timestampMs) / 1000));
+  }
+
+  function savePayloadCache() {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({
+        data: data,
+        received_at: lastPayloadAt
+      }));
+    } catch (e) {
+      // Ignore private mode / storage errors.
+    }
+  }
+
+  function restorePayloadCache() {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.data && typeof parsed.data === "object") {
+        data = Object.assign({}, data, parsed.data);
+      }
+      if (parsed && typeof parsed.received_at === "number") {
+        lastPayloadAt = parsed.received_at;
+      }
+    } catch (e) {
+      // Ignore malformed cache.
+    }
+  }
+
+  function updateCloudState() {
+    const cloudState = document.getElementById("cloudState");
+    if (localApiConnected) {
+      cloudState.textContent = "LOCAL API · LIVE";
+      return;
+    }
+    if (!mqttConnected) {
+      cloudState.textContent = "DISCONNECTED";
+      return;
+    }
+    if (!lastPayloadAt) {
+      cloudState.textContent = "CONNECTED · NO DATA";
+      return;
+    }
+    cloudState.textContent = (Date.now() - lastPayloadAt <= CLOUD_STALE_MS) ? "CONNECTED · LIVE" : "CONNECTED · STALE";
   }
 
   function clock() {
@@ -558,20 +693,209 @@
       new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
   }
 
+  restorePayloadCache();
+  if (!data.servo_mode) data.servo_mode = "auto";
+  updateModeUi();
   render(data);
+  updateCloudState();
   clock();
-  setInterval(clock, 1000);
-
-  /* ---- Demo pulse: simulates the servo sweeping and signal drift.
-         Delete this block and call render() with your live fetch instead. ---- */
   setInterval(function () {
-    const sweep = [45, 90, 135, 180, 135, 90];
-    data.servo_angle = sweep[Math.floor(Date.now() / 2500) % sweep.length];
-    const jitter = Math.max(5, Math.min(31, data.best_signal + Math.floor(Math.random() * 7 - 3)));
-    data.signal = jitter;
-    data.signal_quality = jitter >= 25 ? 'Strong' : jitter >= 18 ? 'Good' : jitter >= 12 ? 'Fair' : 'Weak';
+    clock();
     render(data);
-  }, 2500);
+    updateCloudState();
+  }, 1000);
+
+  /* ================= MQTT OVER INTERNET ================= */
+  const mqttBtn = document.getElementById('mqttBtn');
+  const MQTT_BROKER_URL = "wss://broker.emqx.io:8084/mqtt";
+  const MQTT_TOPIC = "signalbooster/hub1/status";
+  const MQTT_CMD_TOPIC = "signalbooster/hub1/command";
+  const LOCAL_API_URL = "http://192.168.4.1/data";
+  let mqttClient = null;
+  let lastManualAt = 0;
+
+  function isManualMode() {
+    return data.servo_mode === "manual";
+  }
+
+  function updateModeUi() {
+    const manual = isManualMode();
+    modeAutoBtn.setAttribute("aria-pressed", String(!manual));
+    modeManualBtn.setAttribute("aria-pressed", String(manual));
+    servoManual.classList.toggle("is-auto", !manual);
+    document.getElementById("servoSlider").disabled = !manual;
+    document.querySelectorAll(".servo-preset").forEach(function (btn) {
+      btn.disabled = !manual;
+    });
+  }
+
+  function setLocalServo(angle) {
+    angle = Math.max(0, Math.min(180, Number(angle) || 0));
+    data.servo_angle = angle;
+    const slider = document.getElementById("servoSlider");
+    if (slider && document.activeElement !== slider) slider.value = String(angle);
+    document.getElementById("angleVal").textContent = angle;
+    setGauge(angle);
+  }
+
+  function sendServoCommand(angle) {
+    if (!isManualMode()) return;
+    setLocalServo(angle);
+    lastManualAt = Date.now();
+    if (!mqttClient || !mqttClient.connected) return;
+    mqttClient.publish(MQTT_CMD_TOPIC, JSON.stringify({
+      mode: "manual",
+      servo_angle: angle
+    }));
+  }
+
+  function sendServoMode(mode) {
+    data.servo_mode = mode;
+    updateModeUi();
+    if (!mqttClient || !mqttClient.connected) return;
+    const payload = { mode: mode };
+    if (mode === "manual") payload.servo_angle = data.servo_angle;
+    mqttClient.publish(MQTT_CMD_TOPIC, JSON.stringify(payload));
+  }
+
+  function applyIncomingPayload(payload) {
+    const isLocalApiPayload =
+      typeof payload.satellites === "number" &&
+      typeof payload.angle === "number";
+
+    if (isLocalApiPayload) {
+      data.internet = true;
+      data.network = "SYSTEM AP";
+      data.sim = "N/A";
+      data.ip = "192.168.4.1";
+      data.satellites = payload.satellites;
+      data.signal = payload.signal;
+      data.signal_quality = signalToQuality(Math.round(payload.signal / 100 * 31));
+      data.servo_angle = payload.angle;
+      data.best_angle = payload.angle;
+      data.best_signal = payload.signal;
+      data.servo_mode = "auto";
+    }
+
+    if (typeof payload.internet === "boolean") data.internet = payload.internet;
+    if (typeof payload.network === "string") data.network = payload.network;
+    if (typeof payload.signal === "number") data.signal = payload.signal;
+    if (typeof payload.signal_quality === "string") data.signal_quality = payload.signal_quality;
+    if (typeof payload.servo_angle === "number") {
+      if (!isManualMode() || Date.now() - lastManualAt > 2500) {
+        setLocalServo(payload.servo_angle);
+      }
+    }
+    if (typeof payload.servo_mode === "string") {
+      data.servo_mode = payload.servo_mode === "manual" ? "manual" : "auto";
+      updateModeUi();
+    }
+    if (typeof payload.best_angle === "number") data.best_angle = payload.best_angle;
+    if (typeof payload.best_signal === "number") data.best_signal = payload.best_signal;
+    if (typeof payload.satellites === "number") data.satellites = payload.satellites;
+    if (typeof payload.sim === "string") data.sim = payload.sim;
+    if (typeof payload.ip === "string") data.ip = payload.ip;
+    lastPayloadAt = Date.now();
+    savePayloadCache();
+    render(data);
+    updateCloudState();
+  }
+
+  async function pollLocalApi() {
+    try {
+      const response = await fetch(LOCAL_API_URL, { cache: "no-store" });
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      applyIncomingPayload(await response.json());
+      localApiConnected = true;
+      updateCloudState();
+    } catch (error) {
+      localApiConnected = false;
+      updateCloudState();
+    }
+  }
+
+  pollLocalApi();
+  setInterval(pollLocalApi, 1000);
+
+  function disconnectMqtt() {
+    if (mqttClient) {
+      mqttClient.end(true);
+      mqttClient = null;
+    }
+    mqttConnected = false;
+    updateCloudState();
+    mqttBtn.textContent = "Connect Cloud";
+  }
+
+  function connectMqtt() {
+    mqttBtn.disabled = true;
+    mqttBtn.textContent = "Connecting...";
+
+    mqttClient = mqtt.connect(MQTT_BROKER_URL, {
+      reconnectPeriod: 3000,
+      clean: true,
+      connectTimeout: 10000
+    });
+
+    mqttClient.on("connect", function () {
+      mqttConnected = true;
+      mqttBtn.disabled = false;
+      mqttBtn.textContent = "Disconnect Cloud";
+      updateCloudState();
+      mqttClient.subscribe(MQTT_TOPIC, function (err) {
+        if (err) {
+          console.error("MQTT subscribe error:", err);
+        }
+        sendServoMode(data.servo_mode);
+      });
+    });
+
+    mqttClient.on("message", function (topic, message) {
+      if (topic !== MQTT_TOPIC) return;
+      try {
+        const payload = JSON.parse(String(message));
+        applyIncomingPayload(payload);
+      } catch (e) {
+        console.error("Invalid JSON payload:", e);
+      }
+    });
+
+    mqttClient.on("error", function (err) {
+      console.error("MQTT error:", err);
+      mqttConnected = false;
+      updateCloudState();
+      mqttBtn.disabled = false;
+      mqttBtn.textContent = "Connect Cloud";
+    });
+
+    mqttClient.on("close", function () {
+      mqttClient = null;
+      mqttConnected = false;
+      updateCloudState();
+      mqttBtn.disabled = false;
+      mqttBtn.textContent = "Connect Cloud";
+    });
+  }
+
+  mqttBtn.addEventListener("click", function () {
+    if (mqttClient && mqttClient.connected) {
+      disconnectMqtt();
+      return;
+    }
+    connectMqtt();
+  });
+
+  const servoSlider = document.getElementById("servoSlider");
+  servoSlider.addEventListener("input", function () {
+    sendServoCommand(Number(servoSlider.value));
+  });
+  document.querySelectorAll(".servo-preset").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      sendServoCommand(Number(btn.dataset.angle));
+    });
+  });
+  modeAutoBtn.addEventListener("click", function () { sendServoMode("auto"); });
+  modeManualBtn.addEventListener("click", function () { sendServoMode("manual"); });
 </script>
 </body>
 </html>
