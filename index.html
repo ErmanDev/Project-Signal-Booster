@@ -343,7 +343,6 @@
       <div class="brand-sub">LTE cellular hub · signal mapping &amp; boosting</div>
     </div>
     <div class="topbar-right">
-      <button class="btn" id="mqttBtn" type="button">Connect Cloud</button>
       <div class="themebar" id="themebar" role="group" aria-label="Color theme">
         <span class="tlabel">Theme</span>
       </div>
@@ -737,7 +736,6 @@
   clock();
 
   /* ================= MQTT OVER INTERNET ================= */
-  const mqttBtn = document.getElementById('mqttBtn');
   const MQTT_BROKER_URL = "wss://broker.emqx.io:8084/mqtt";
   const MQTT_TOPIC = "signalbooster/hub1/status";
   const MQTT_CMD_TOPIC = "signalbooster/hub1/command";
@@ -815,20 +813,7 @@
     updateCloudState();
   }
 
-  function disconnectMqtt() {
-    if (mqttClient) {
-      mqttClient.end(true);
-      mqttClient = null;
-    }
-    mqttConnected = false;
-    mqttConnecting = false;
-    updateCloudState();
-    mqttBtn.textContent = "Connect Cloud";
-  }
-
   function connectMqtt() {
-    mqttBtn.disabled = true;
-    mqttBtn.textContent = "Connecting...";
     mqttConnecting = true;
     updateCloudState();
 
@@ -842,8 +827,6 @@
     mqttClient.on("connect", function () {
       mqttConnected = true;
       mqttConnecting = false;
-      mqttBtn.disabled = false;
-      mqttBtn.textContent = "Disconnect Cloud";
       updateCloudState();
       mqttClient.subscribe(MQTT_TOPIC, function (err) {
         if (err) {
@@ -868,26 +851,14 @@
       mqttConnected = false;
       mqttConnecting = true;
       updateCloudState();
-      mqttBtn.disabled = false;
-      mqttBtn.textContent = "Connect Cloud";
     });
 
     mqttClient.on("close", function () {
       mqttConnected = false;
       mqttConnecting = !!(mqttClient && mqttClient.reconnecting);
       updateCloudState();
-      mqttBtn.disabled = false;
-      mqttBtn.textContent = mqttConnecting ? "Connecting..." : "Connect Cloud";
     });
   }
-
-  mqttBtn.addEventListener("click", function () {
-    if (mqttClient && mqttClient.connected) {
-      disconnectMqtt();
-      return;
-    }
-    connectMqtt();
-  });
 
   const servoSlider = document.getElementById("servoSlider");
   servoSlider.addEventListener("input", function () {

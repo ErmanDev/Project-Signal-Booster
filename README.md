@@ -143,6 +143,8 @@ PubSubClient is **not** required unless you set `WIFI_FALLBACK` to 1.
 
 Production: [https://project-signal-booster.vercel.app](https://project-signal-booster.vercel.app)
 
+The dashboard auto-connects to the MQTT broker on load and stays connected with reconnect; there is no Connect Cloud / Disconnect Cloud button.
+
 1. Open the page (or `index.html` locally). It auto-connects to the broker and **waits for the LTE hub**. Until a real MQTT payload arrives, status is **OFFLINE / WAITING FOR LTE** and gauges show **—** (not a fake 0-bar live reading). Cached values are never treated as CONNECTED.
 2. Power the hub. Wait until the top pill says **CONNECTED · LIVE** (not DISCONNECTED / WAITING FOR LTE / STALE).
 3. Confirm **real** values:
