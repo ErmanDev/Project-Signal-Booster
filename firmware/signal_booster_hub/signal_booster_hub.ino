@@ -11,23 +11,22 @@
  * A7670C RX          → ESP32 GPIO 17 (UART2 TX)
  * A7670C PWRKEY      → ESP32 GPIO 27  (pulse LOW ~1.2s if AT is silent)
  * Servo signal       → ESP32 GPIO 13  (yellow/orange)
+ * A7670C VIN         → boost 5.0 V   (board has VIN only — no VBAT pad)
  * Servo VCC (red)    → boost 5.0 V
  * Servo GND (brown)  → common GND
  * Power switch       → battery +  (NOT a GPIO)
  * Boost EN (if any)  → switched battery + so the boost dies with the switch
- * Common GND         → battery −, boost GND, ESP32 GND, modem GND, servo GND
+ * Common GND         → Li-ion−, boost GND, A7670C GND, ESP32 GND, servo GND
  *
  * UART: 115200 8N1. Common GND is required or AT will never answer.
  *
- * ========== POWER PATH ==========
- * Li-ion+ → POWER SWITCH → split:
- *   (A) A7670C VBAT 3.4–4.2 V if it is a bare module / VBAT pad
- *   (B) boost IN+
- * Boost OUT 5.0 V → ESP32 VIN and servo VCC only.
- * If the A7670C is a 5 V breakout with an onboard 3.8 V regulator,
- * feed that board from boost 5 V AFTER the switch, not from raw 4.2 V.
- * Never put 5 V into a bare VBAT pad.
- * Put 470 µF+ across the modem power pins.
+ * ========== POWER PATH (this board: VIN only) ==========
+ * Li-ion+ → POWER SWITCH → boost IN+
+ * Boost OUT 5.0 V → A7670C VIN + ESP32 VIN + servo VCC
+ * Li-ion− → common GND
+ *
+ * Do not wire the cell to the modem. VIN is the 5 V input; the breakout
+ * already regulates to ~3.8 V internally. 470 µF+ on A7670C VIN/GND if room.
  */
 
 #include <WiFi.h>
@@ -287,7 +286,7 @@ bool ensureModemAwake() {
     return true;
   }
 
-  Serial.println("Modem still silent after PWRKEY. Check UART (TX/RX crossed), GND, VBAT.");
+  Serial.println("Modem still silent after PWRKEY. Check UART (TX/RX crossed), GND, and 5 V on A7670C VIN.");
   Modem.begin(MODEM_BAUD, SERIAL_8N1, MODEM_RX_PIN, MODEM_TX_PIN);
   return false;
 }

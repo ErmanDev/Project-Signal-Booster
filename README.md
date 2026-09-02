@@ -10,32 +10,30 @@ There is no mock RSSI in the firmware.
 - SIMCom A7670C (LTE Cat-1). There is no “A7076C” / “simcol” part — use A7670C.
 - One Li-ion cell, a **physical power switch**, a 5 V boost converter
 - Hobby servo with the LTE antenna on the horn
-- 470 µF (or larger) capacitor across the modem power pins
+- 470 µF (or larger) on A7670C **VIN/GND** if there is room (LTE bursts pull hard)
 - Common ground everywhere
 
 ## Power path (switch is not a GPIO)
 
-The node is battery-powered. The switch sits in the **battery +** line so the whole system is dead when the switch is open.
+This A7670C board has **VIN only** — no VBAT pad. Do not wire the cell to the modem. VIN is the **5 V** input; the breakout already regulates to ~3.8 V internally.
+
+The switch sits in the **battery +** line so the whole system is dead when the switch is open.
 
 ```
-Li-ion+ ──► POWER SWITCH ──┬──► (A) A7670C VBAT  3.4–4.2 V
-                           │     (bare module / VBAT pad only)
-                           │
-                           └──► (B) boost IN+
-                                      │
-                                      ▼
-                                 boost OUT 5.0 V
-                                      │
-                          ┌───────────┴───────────┐
-                          ▼                       ▼
-                     ESP32 VIN              servo VCC (red)
+Li-ion+ ──► POWER SWITCH ──► boost IN+
+                                 │
+                                 ▼
+                            boost OUT 5.0 V
+                                 │
+              ┌──────────────────┼──────────────────┐
+              ▼                  ▼                  ▼
+         A7670C VIN          ESP32 VIN         servo VCC (red)
+
+Li-ion− ──► common GND (boost, A7670C, ESP32, servo)
 ```
 
-- **Bare A7670C / VBAT pad:** 3.4–4.2 V from the switched cell. Never put 5 V into a bare VBAT pad.
-- **5 V breakout with an onboard 3.8 V regulator:** feed that board from **boost 5 V after the switch**, not from raw 4.2 V, if the silk/docs say 5 V only.
 - **Boost EN** (if the converter has an enable pin): tie it to **switched +** so the boost dies with the switch.
-- **Common GND:** battery −, boost GND, ESP32 GND, modem GND, servo GND.
-- **470 µF+** on the modem power pins (LTE bursts pull hard).
+- **470 µF+** across A7670C VIN and GND if there is room.
 
 ## Pin map (every wire)
 
@@ -44,6 +42,7 @@ Li-ion+ ──► POWER SWITCH ──┬──► (A) A7670C VBAT  3.4–4.2 V
 | A7670C TX | ESP32 **GPIO 16** (RX2) | Modem → ESP32 |
 | A7670C RX | ESP32 **GPIO 17** (TX2) | ESP32 → modem, **115200 8N1** |
 | A7670C PWRKEY | ESP32 **GPIO 27** | Firmware pulses **LOW ~1.2 s** if `AT` is silent; skipped if the modem already answers |
+| A7670C VIN | Boost **5.0 V** | Board has VIN only. Do not wire the cell to the modem |
 | Servo signal (yellow/orange) | ESP32 **GPIO 13** | PWM |
 | Servo VCC (red) | Boost **5.0 V** | Do not power the servo from an ESP32 5 V/3.3 V pin |
 | Servo GND (brown) | Common GND | |
@@ -122,7 +121,7 @@ Board support: **esp32** by Espressif (`https://espressif.github.io/arduino-esp3
 
 3. Tools: Board **ESP32 Dev Module**, upload speed 115200, the COM port of the DevKit.
 4. Upload. Open **Serial Monitor at 115200**. You should see `AT` succeed, then CSQ lines and a JSON payload every ~2 s.
-5. If the modem is silent on battery, GPIO 27 pulses PWRKEY and the sketch waits up to ~12 s for boot. It tries **115200** first, then **9600**. If it stays silent: check TX/RX (they must be crossed), common GND, and modem power (3.4–4.2 V on VBAT, or 5 V on a regulated breakout).
+5. If the modem is silent on battery, GPIO 27 pulses PWRKEY and the sketch waits up to ~12 s for boot. It tries **115200** first, then **9600**. If it stays silent: check TX/RX (they must be crossed), common GND, and **5 V on A7670C VIN** from the boost.
 
 ## Open the dashboard and confirm LIVE
 
