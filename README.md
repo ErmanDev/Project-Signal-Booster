@@ -42,13 +42,15 @@ Li-ion− ──► common GND (boost, A7670C, ESP32, servo)
 
 ## Pin map (every wire)
 
+Labels below match the **ESP32 DEVKIT V1 silkscreen**. GPIO numbers stay **16 / 17 / 27 / 13**. There is **no D16** printed — UART2 is **RX2** (next to D4) and **TX2** (next to D5). Do **not** use RX0 / TX0 (USB serial).
+
 | From | To | Notes |
 | --- | --- | --- |
-| A7670C TX | ESP32 **GPIO 16** (RX2) | Modem → ESP32 |
-| A7670C RX | ESP32 **GPIO 17** (TX2) | ESP32 → modem, **115200 8N1** |
-| A7670C PWRKEY | ESP32 **GPIO 27** | Firmware pulses **LOW ~1.2 s** if `AT` is silent; skipped if the modem already answers |
+| A7670C TX | ESP32 **RX2** (GPIO 16, next to D4 — no D16 printed) | Modem → ESP32 |
+| A7670C RX | ESP32 **TX2** (GPIO 17, next to D5) | ESP32 → modem, **115200 8N1** |
+| A7670C PWRKEY | ESP32 **D27** (GPIO 27) | Firmware pulses **LOW ~1.2 s** if `AT` is silent; skipped if the modem already answers |
 | A7670C VIN | Boost **5.0 V** | Board has VIN only. Do not wire the cell to the modem |
-| Servo signal (yellow/orange) | ESP32 **GPIO 13** | PWM |
+| Servo signal (yellow/orange) | ESP32 **D13** (GPIO 13) | PWM |
 | Servo VCC (red) | Boost **5.0 V** | Do not power the servo from an ESP32 5 V/3.3 V pin |
 | Servo GND (brown) | Common GND | |
 | Power switch | **Battery +** only | Not a GPIO |
@@ -137,7 +139,7 @@ PubSubClient is **not** required unless you set `WIFI_FALLBACK` to 1.
 2. Put a **data-enabled** SIM in the A7670C. For **TM**, turn on mobile data (load / promo). No Wi-Fi SSID is needed.
 3. Tools: Board **ESP32 Dev Module**, upload speed 115200, the COM port of the DevKit.
 4. Upload. Open **Serial Monitor at 115200**. You should see `AT` succeed, IMSI/APN, `NETOPEN`, then `CMQTTCONNECT` and a JSON payload every few seconds.
-5. If the modem is silent on battery, GPIO 27 pulses PWRKEY and the sketch waits up to ~12 s for boot. It tries **115200** first, then **9600**. If it stays silent: check TX/RX (they must be crossed), common GND, and **5 V on A7670C VIN** from the boost.
+5. If the modem is silent on battery, **D27** (GPIO 27) pulses PWRKEY and the sketch waits up to ~12 s for boot. It tries **115200** first, then **9600**. If it stays silent: check TX/RX (they must be crossed: A7670C TX → **RX2**, A7670C RX → **TX2**), common GND, and **5 V on A7670C VIN** from the boost.
 
 ## Open the dashboard and confirm LIVE
 
