@@ -8,10 +8,14 @@
  * PubSubClient / WiFi are only compiled when WIFI_FALLBACK is 1.
  *
  * ========== PIN MAP (every wire) ==========
- * A7670C TX          → ESP32 GPIO 16 (UART2 RX)
- * A7670C RX          → ESP32 GPIO 17 (UART2 TX)
- * A7670C PWRKEY      → ESP32 GPIO 27  (pulse LOW ~1.2s if AT is silent)
- * Servo signal       → ESP32 GPIO 13  (yellow/orange)
+ * ESP32 DEVKIT V1 silkscreen — GPIO numbers stay 16 / 17 / 27 / 13.
+ * There is no D16 printed. UART2 is labeled RX2 / TX2, not D16 / D17.
+ * Do not use RX0 / TX0 (USB serial).
+ *
+ * A7670C TX          → ESP32 RX2 (GPIO 16; next to D4 — no D16 printed)
+ * A7670C RX          → ESP32 TX2 (GPIO 17; next to D5)
+ * A7670C PWRKEY      → ESP32 D27 (GPIO 27)  (pulse LOW ~1.2s if AT is silent)
+ * Servo signal       → ESP32 D13 (GPIO 13)  (yellow/orange)
  * A7670C VIN         → boost 5.0 V   (board has VIN only — no VBAT pad)
  * Servo VCC (red)    → boost 5.0 V
  * Servo GND (brown)  → common GND
@@ -19,7 +23,7 @@
  * Boost EN (if any)  → switched battery + so the boost dies with the switch
  * Common GND         → Li-ion−, boost GND, A7670C GND, ESP32 GND, servo GND
  *
- * UART: 115200 8N1. Common GND is required or AT will never answer.
+ * UART: 115200 8N1 on UART2 (RX2/TX2). Common GND is required or AT will never answer.
  *
  * ========== POWER PATH (this board: VIN only) ==========
  * Li-ion+ → POWER SWITCH → boost IN+
@@ -56,10 +60,10 @@ const char* MQTT_CLIENT_ID = "signalbooster-hub1";
 const char* MQTT_URL = "tcp://broker.emqx.io:1883";
 
 // ---------- Pins ----------
-static const int MODEM_RX_PIN = 16;   // ESP32 RX2  <- A7670C TX
-static const int MODEM_TX_PIN = 17;   // ESP32 TX2  -> A7670C RX
-static const int PWRKEY_PIN = 27;     // pulse LOW to boot modem on battery
-static const int SERVO_PIN = 13;      // PWM to hobby servo
+static const int MODEM_RX_PIN = 16;   // silkscreen RX2 (next to D4; no D16) <- A7670C TX
+static const int MODEM_TX_PIN = 17;   // silkscreen TX2 (next to D5) -> A7670C RX
+static const int PWRKEY_PIN = 27;     // silkscreen D27 — pulse LOW to boot modem on battery
+static const int SERVO_PIN = 13;      // silkscreen D13 — PWM to hobby servo
 
 static const long MODEM_BAUD = 115200;
 static const uint16_t SERVO_MIN_US = 500;
