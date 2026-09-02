@@ -122,7 +122,7 @@ Board support: **esp32** by Espressif (`https://espressif.github.io/arduino-esp3
 
 3. Tools: Board **ESP32 Dev Module**, upload speed 115200, the COM port of the DevKit.
 4. Upload. Open **Serial Monitor at 115200**. You should see `AT` succeed, then CSQ lines and a JSON payload every ~2 s.
-5. If the modem is silent on battery, GPIO 27 pulses PWRKEY. If it stays silent: check TX/RX (they must be crossed), common GND, and modem power (3.4–4.2 V on VBAT, or 5 V on a regulated breakout).
+5. If the modem is silent on battery, GPIO 27 pulses PWRKEY and the sketch waits up to ~12 s for boot. It tries **115200** first, then **9600**. If it stays silent: check TX/RX (they must be crossed), common GND, and modem power (3.4–4.2 V on VBAT, or 5 V on a regulated breakout).
 
 ## Open the dashboard and confirm LIVE
 

@@ -235,6 +235,21 @@ bool modemAnswers() {
   return r.indexOf("OK") >= 0;
 }
 
+bool openModemAt(long baud) {
+  Modem.begin(baud, SERIAL_8N1, MODEM_RX_PIN, MODEM_TX_PIN);
+  delay(250);
+  return modemAnswers();
+}
+
+bool waitForAt(unsigned long giveUpMs) {
+  unsigned long start = millis();
+  while (millis() - start < giveUpMs) {
+    if (modemAnswers()) return true;
+    delay(400);
+  }
+  return false;
+}
+
 void pulsePwrkey() {
   Serial.println("PWRKEY: pulse LOW 1.2s (modem silent)");
   pinMode(PWRKEY_PIN, OUTPUT);
@@ -243,28 +258,37 @@ void pulsePwrkey() {
   digitalWrite(PWRKEY_PIN, LOW);
   delay(PWRKEY_PULSE_MS);
   digitalWrite(PWRKEY_PIN, HIGH);
-  delay(3000);
 }
 
 bool ensureModemAwake() {
   pinMode(PWRKEY_PIN, OUTPUT);
   digitalWrite(PWRKEY_PIN, HIGH);
-  Modem.begin(MODEM_BAUD, SERIAL_8N1, MODEM_RX_PIN, MODEM_TX_PIN);
-  delay(300);
 
-  if (modemAnswers()) {
-    Serial.println("Modem already answering AT");
+  Serial.println("Trying modem at 115200...");
+  // Give an already-on module time to answer before pulsing PWRKEY
+  // (a 1.2s LOW pulse toggles power and would turn a live modem off).
+  if (openModemAt(MODEM_BAUD) || waitForAt(5000)) {
+    Serial.println("Modem already answering AT @ 115200");
     sendAT("ATE0", 800);
     return true;
   }
 
   pulsePwrkey();
-  if (modemAnswers()) {
+  Serial.println("Waiting up to 12s for A7670C boot...");
+  if (openModemAt(MODEM_BAUD) || waitForAt(12000)) {
     sendAT("ATE0", 800);
     return true;
   }
 
-  Serial.println("Modem still silent after PWRKEY. Check UART, GND, VBAT.");
+  Serial.println("Trying 9600 (some A7670C boards ship at this baud)...");
+  if (openModemAt(9600L) || waitForAt(2000)) {
+    Serial.println("Modem answering @ 9600. Leaving baud as-is.");
+    sendAT("ATE0", 800);
+    return true;
+  }
+
+  Serial.println("Modem still silent after PWRKEY. Check UART (TX/RX crossed), GND, VBAT.");
+  Modem.begin(MODEM_BAUD, SERIAL_8N1, MODEM_RX_PIN, MODEM_TX_PIN);
   return false;
 }
 
