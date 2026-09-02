@@ -105,10 +105,34 @@
     width: 8px; height: 8px; border-radius: 50%; background: var(--signal);
     box-shadow: 0 0 0 0 var(--gauge-glow); animation: pulse 2s infinite;
   }
+  .dot.off {
+    background: var(--down);
+    box-shadow: none;
+    animation: none;
+  }
   @keyframes pulse {
     0%   { box-shadow: 0 0 0 0 var(--gauge-glow); }
     70%  { box-shadow: 0 0 0 8px transparent; }
     100% { box-shadow: 0 0 0 0 transparent; }
+  }
+  .waiting .sig-num,
+  .waiting .angle-num,
+  .waiting .stat .v,
+  .waiting .status-meta .v,
+  .waiting .sig-pill,
+  .waiting .angle-best {
+    color: var(--dim);
+  }
+  .waiting .needle { opacity: 0.18; }
+  .last-seen .sig-num,
+  .last-seen .angle-num,
+  .last-seen .bars,
+  .last-seen .stat .v,
+  .last-seen .status-meta .v,
+  .last-seen .angle-best,
+  .last-seen .sig-pill,
+  .last-seen .gauge {
+    opacity: 0.42;
   }
 
   /* Theme switcher */
@@ -311,12 +335,12 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap waiting">
 
   <header class="topbar">
     <div>
       <div class="brand-title">Signal Monitor</div>
-      <div class="brand-sub">Arduino-based signal mapping &amp; boosting</div>
+      <div class="brand-sub">LTE cellular hub · signal mapping &amp; boosting</div>
     </div>
     <div class="topbar-right">
       <button class="btn" id="mqttBtn" type="button">Connect Cloud</button>
@@ -333,22 +357,22 @@
     <section class="card status-card span-4">
       <div class="card-label">Connection Status</div>
       <div class="status-main">
-        <div class="status-ring" id="statusRing">
+        <div class="status-ring down" id="statusRing">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/>
             <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>
           </svg>
         </div>
         <div>
-          <div class="status-word" id="statusWord">CONNECTED</div>
-          <div class="status-note" id="statusNote">Hub online via Globe network</div>
+          <div class="status-word down" id="statusWord">OFFLINE</div>
+          <div class="status-note" id="statusNote">WAITING FOR LTE · Waiting for the cellular hub</div>
         </div>
       </div>
       <div class="status-meta">
-        <div><div class="k">Network</div><div class="v" id="mNet">Globe</div></div>
-        <div><div class="k">SIM</div><div class="v" id="mSim">READY</div></div>
-        <div><div class="k">Public IP</div><div class="v" id="mIp">10.123.45.67</div></div>
-        <div><div class="k">Quality</div><div class="v" id="mQual">Strong</div></div>
+        <div><div class="k">Network</div><div class="v" id="mNet">—</div></div>
+        <div><div class="k">SIM</div><div class="v" id="mSim">—</div></div>
+        <div><div class="k">Public IP</div><div class="v" id="mIp">—</div></div>
+        <div><div class="k">Quality</div><div class="v" id="mQual">—</div></div>
       </div>
     </section>
 
@@ -389,7 +413,7 @@
         </svg>
       </div>
       <div class="angle-readout">
-        <div class="angle-num"><span id="angleVal">135</span><span class="deg">°</span></div>
+        <div class="angle-num"><span id="angleVal">—</span><span class="deg" id="angleDeg">°</span></div>
         <div class="angle-unit">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/>
@@ -397,7 +421,7 @@
           Servo
         </div>
       </div>
-      <div class="angle-best">best lock at <b id="bestAngle">135°</b> · signal <b id="bestSig">27</b></div>
+      <div class="angle-best">best lock at <b id="bestAngle">—</b> · signal <b id="bestSig">—</b></div>
       <div class="servo-manual is-auto" id="servoManual">
         <div class="card-label">Servo control</div>
         <div class="mode-switch" role="group" aria-label="Servo mode">
@@ -420,10 +444,10 @@
       <div class="card-label">Signal Strength</div>
       <div class="sig-top">
         <div>
-          <div class="sig-num" id="sigNum">27</div>
-          <div class="sig-unit">Percent / 100</div>
+          <div class="sig-num" id="sigNum">—</div>
+          <div class="sig-unit">RSSI 0–31</div>
         </div>
-        <div class="sig-pill" id="sigQuality">Strong</div>
+        <div class="sig-pill" id="sigQuality">—</div>
       </div>
       <div class="bars" id="bars">
         <i></i><i></i><i></i><i></i><i></i>
@@ -436,22 +460,22 @@
     <!-- MINI STATS -->
     <section class="card stat span-3">
       <div class="card-label">Best Signal</div>
-      <div><span class="v" id="statBestSig">27</span></div>
+      <div><span class="v" id="statBestSig">—</span></div>
       <div class="sub">peak recorded</div>
     </section>
     <section class="card stat span-3">
       <div class="card-label">Best Angle</div>
-      <div><span class="v" id="statBestAng">135</span><span class="u">°</span></div>
+      <div><span class="v" id="statBestAng">—</span><span class="u" id="statBestAngUnit">°</span></div>
       <div class="sub">servo position</div>
     </section>
     <section class="card stat span-3">
       <div class="card-label">Network</div>
-      <div><span class="v" id="statNet">Globe</span></div>
+      <div><span class="v" id="statNet">—</span></div>
       <div class="sub">carrier lock</div>
     </section>
     <section class="card stat span-3">
       <div class="card-label">Satellites</div>
-      <div><span class="v" id="statSatellites">--</span></div>
+      <div><span class="v" id="statSatellites">—</span></div>
       <div class="sub">currently visible</div>
     </section>
 
@@ -548,35 +572,37 @@
   })();
 
   function setGauge(angle) {
-    const frac = Math.max(0, Math.min(1, angle / 180));
+    const empty = angle == null || Number.isNaN(Number(angle));
+    const frac = empty ? 0 : Math.max(0, Math.min(1, Number(angle) / 180));
     document.getElementById('arcActive')
       .setAttribute('stroke-dashoffset', (ARC_LEN * (1 - frac)).toFixed(2));
     document.getElementById('needleG').style.transform =
       'rotate(' + (START + SWEEP * frac).toFixed(2) + 'deg)';
-    // light up the scale numbers the needle has passed
     document.querySelectorAll('#gaugeNums .g-num').forEach(function (t) {
-      t.classList.toggle('hot', Number(t.dataset.val) <= angle);
+      t.classList.toggle('hot', !empty && Number(t.dataset.val) <= Number(angle));
     });
   }
 
   /* ================= DATA ================= */
-  // Incoming payload (matches your Arduino JSON)
+  // Empty until a real MQTT payload arrives. Never seed zeros / WiFi as live.
+  const EMPTY = "—";
   let data = {
     internet: false,
-    network: "WiFi",
-    signal: 0,
-    signal_quality: "No Signal",
-    servo_angle: 0,
-    best_angle: 0,
-    best_signal: 0,
-    satellites: 0,
-    sim: "UNKNOWN",
-    ip: "-",
+    network: "",
+    signal: null,
+    signal_quality: "",
+    servo_angle: null,
+    best_angle: null,
+    best_signal: null,
+    satellites: null,
+    sim: "",
+    ip: "",
     servo_mode: "auto"
   };
   const CACHE_KEY = "hub-last-payload-v1";
   const CLOUD_STALE_MS = 45000;
   let lastPayloadAt = 0;
+  let receivedPayload = false;
   let mqttConnected = false;
   const modeAutoBtn = document.getElementById("modeAuto");
   const modeManualBtn = document.getElementById("modeManual");
@@ -591,17 +617,27 @@
   }
 
   function qualityToBars(q) {
-    return ({ "No Signal":0, "Weak":2, "Fair":3, "Good":4, "Strong":5 })[q] ?? 3;
+    return ({ "No Signal":0, "Weak":2, "Fair":3, "Good":4, "Strong":5 })[q] ?? 0;
+  }
+
+  function dash(value, suffix) {
+    if (value == null || value === "") return EMPTY;
+    return suffix ? (value + suffix) : String(value);
   }
 
   function render(d) {
-    const fresh = lastPayloadAt > 0 && (Date.now() - lastPayloadAt) <= CLOUD_STALE_MS;
-    const online = d.internet && fresh;
+    const fresh = receivedPayload && lastPayloadAt > 0 && (Date.now() - lastPayloadAt) <= CLOUD_STALE_MS;
+    const online = !!(d.internet && fresh);
+    const wrap = document.querySelector(".wrap");
+    wrap.classList.toggle("waiting", !receivedPayload);
+    wrap.classList.toggle("last-seen", receivedPayload && !online);
 
-    // Status
     const ring = document.getElementById('statusRing');
     const word = document.getElementById('statusWord');
     const note = document.getElementById('statusNote');
+    const liveDot = document.querySelector(".dot");
+    if (liveDot) liveDot.classList.toggle("off", !online);
+
     if (online) {
       ring.classList.remove('down'); word.classList.remove('down');
       word.textContent = 'CONNECTED';
@@ -609,34 +645,56 @@
     } else {
       ring.classList.add('down'); word.classList.add('down');
       word.textContent = 'OFFLINE';
-      if (lastPayloadAt > 0) {
-        note.textContent = 'Telemetry stale for ' + secondsAgo(lastPayloadAt) + 's';
+      if (!receivedPayload) {
+        note.textContent = 'WAITING FOR LTE · Waiting for the cellular hub';
       } else {
-        note.textContent = 'Waiting for cloud telemetry';
+        note.textContent = 'Telemetry stale for ' + secondsAgo(lastPayloadAt) + 's · last-seen only';
       }
     }
-    document.getElementById('mNet').textContent  = d.network;
-    document.getElementById('mSim').textContent  = d.sim;
-    document.getElementById('mIp').textContent   = d.ip;
-    document.getElementById('mQual').textContent = d.signal_quality;
 
-    // Angle gauge
+    if (!receivedPayload) {
+      document.getElementById('mNet').textContent = EMPTY;
+      document.getElementById('mSim').textContent = EMPTY;
+      document.getElementById('mIp').textContent = EMPTY;
+      document.getElementById('mQual').textContent = EMPTY;
+      setGauge(null);
+      document.getElementById('angleVal').textContent = EMPTY;
+      document.getElementById('angleDeg').style.visibility = 'hidden';
+      document.getElementById('bestAngle').textContent = EMPTY;
+      document.getElementById('bestSig').textContent = EMPTY;
+      document.getElementById('sigNum').textContent = EMPTY;
+      document.getElementById('sigQuality').textContent = EMPTY;
+      document.querySelectorAll('#bars i').forEach(function (b) { b.classList.remove('on'); });
+      document.getElementById('statBestSig').textContent = EMPTY;
+      document.getElementById('statBestAng').textContent = EMPTY;
+      document.getElementById('statBestAngUnit').style.visibility = 'hidden';
+      document.getElementById('statNet').textContent = EMPTY;
+      document.getElementById('statSatellites').textContent = EMPTY;
+      return;
+    }
+
+    document.getElementById('angleDeg').style.visibility = '';
+    document.getElementById('statBestAngUnit').style.visibility = '';
+    document.getElementById('mNet').textContent  = dash(d.network);
+    document.getElementById('mSim').textContent  = dash(d.sim);
+    document.getElementById('mIp').textContent   = dash(d.ip);
+    document.getElementById('mQual').textContent = dash(d.signal_quality);
+
     setGauge(d.servo_angle);
-    document.getElementById('angleVal').textContent = d.servo_angle;
-    document.getElementById('bestAngle').textContent = d.best_angle + '°';
-    document.getElementById('bestSig').textContent = d.best_signal;
+    document.getElementById('angleVal').textContent = dash(d.servo_angle);
+    document.getElementById('bestAngle').textContent = dash(d.best_angle, '°');
+    document.getElementById('bestSig').textContent = dash(d.best_signal);
 
-    // Signal
-    document.getElementById('sigNum').textContent = d.signal;
-    document.getElementById('sigQuality').textContent = d.signal_quality;
+    document.getElementById('sigNum').textContent = dash(d.signal);
+    document.getElementById('sigQuality').textContent = dash(d.signal_quality);
     const on = qualityToBars(d.signal_quality);
     document.querySelectorAll('#bars i').forEach(function (b, i) { b.classList.toggle('on', i < on); });
 
-    // Mini stats
-    document.getElementById('statBestSig').textContent = d.best_signal;
-    document.getElementById('statBestAng').textContent = d.best_angle;
-    document.getElementById('statNet').textContent = d.network;
-    document.getElementById('statSatellites').textContent = d.satellites || '--';
+    document.getElementById('statBestSig').textContent = dash(d.best_signal);
+    document.getElementById('statBestAng').textContent = dash(d.best_angle);
+    document.getElementById('statNet').textContent = dash(d.network);
+    document.getElementById('statSatellites').textContent =
+      (typeof d.satellites === "number" && d.satellites > 0) ? String(d.satellites) : EMPTY;
   }
 
   function secondsAgo(timestampMs) {
@@ -644,6 +702,7 @@
   }
 
   function savePayloadCache() {
+    if (!receivedPayload) return;
     try {
       localStorage.setItem(CACHE_KEY, JSON.stringify({
         data: data,
@@ -654,33 +713,17 @@
     }
   }
 
-  function restorePayloadCache() {
-    try {
-      const raw = localStorage.getItem(CACHE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (parsed && parsed.data && typeof parsed.data === "object") {
-        data = Object.assign({}, data, parsed.data);
-      }
-      if (parsed && typeof parsed.received_at === "number") {
-        lastPayloadAt = parsed.received_at;
-      }
-    } catch (e) {
-      // Ignore malformed cache.
-    }
-  }
-
   function updateCloudState() {
     const cloudState = document.getElementById("cloudState");
     if (!mqttConnected) {
-      cloudState.textContent = "DISCONNECTED";
+      cloudState.textContent = mqttConnecting ? "CONNECTING" : "DISCONNECTED";
       return;
     }
-    if (!lastPayloadAt) {
-      cloudState.textContent = "CONNECTED · NO DATA";
+    if (!receivedPayload) {
+      cloudState.textContent = "WAITING FOR LTE";
       return;
     }
-    cloudState.textContent = (Date.now() - lastPayloadAt <= CLOUD_STALE_MS) ? "CONNECTED · LIVE" : "CONNECTED · STALE";
+    cloudState.textContent = (Date.now() - lastPayloadAt <= CLOUD_STALE_MS) ? "CONNECTED · LIVE" : "STALE";
   }
 
   function clock() {
@@ -688,17 +731,10 @@
       new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
   }
 
-  restorePayloadCache();
   if (!data.servo_mode) data.servo_mode = "auto";
   updateModeUi();
   render(data);
-  updateCloudState();
   clock();
-  setInterval(function () {
-    clock();
-    render(data);
-    updateCloudState();
-  }, 1000);
 
   /* ================= MQTT OVER INTERNET ================= */
   const mqttBtn = document.getElementById('mqttBtn');
@@ -706,6 +742,7 @@
   const MQTT_TOPIC = "signalbooster/hub1/status";
   const MQTT_CMD_TOPIC = "signalbooster/hub1/command";
   let mqttClient = null;
+  let mqttConnecting = false;
   let lastManualAt = 0;
 
   function isManualMode() {
@@ -771,6 +808,7 @@
     if (typeof payload.satellites === "number") data.satellites = payload.satellites;
     if (typeof payload.sim === "string") data.sim = payload.sim;
     if (typeof payload.ip === "string") data.ip = payload.ip;
+    receivedPayload = true;
     lastPayloadAt = Date.now();
     savePayloadCache();
     render(data);
@@ -783,6 +821,7 @@
       mqttClient = null;
     }
     mqttConnected = false;
+    mqttConnecting = false;
     updateCloudState();
     mqttBtn.textContent = "Connect Cloud";
   }
@@ -790,6 +829,8 @@
   function connectMqtt() {
     mqttBtn.disabled = true;
     mqttBtn.textContent = "Connecting...";
+    mqttConnecting = true;
+    updateCloudState();
 
     if (mqttClient) mqttClient.end(true);
     mqttClient = mqtt.connect(MQTT_BROKER_URL, {
@@ -800,6 +841,7 @@
 
     mqttClient.on("connect", function () {
       mqttConnected = true;
+      mqttConnecting = false;
       mqttBtn.disabled = false;
       mqttBtn.textContent = "Disconnect Cloud";
       updateCloudState();
@@ -824,6 +866,7 @@
     mqttClient.on("error", function (err) {
       console.error("MQTT error:", err);
       mqttConnected = false;
+      mqttConnecting = true;
       updateCloudState();
       mqttBtn.disabled = false;
       mqttBtn.textContent = "Connect Cloud";
@@ -831,9 +874,10 @@
 
     mqttClient.on("close", function () {
       mqttConnected = false;
+      mqttConnecting = !!(mqttClient && mqttClient.reconnecting);
       updateCloudState();
       mqttBtn.disabled = false;
-      mqttBtn.textContent = "Connect Cloud";
+      mqttBtn.textContent = mqttConnecting ? "Connecting..." : "Connect Cloud";
     });
   }
 
@@ -856,6 +900,12 @@
   });
   modeAutoBtn.addEventListener("click", function () { sendServoMode("auto"); });
   modeManualBtn.addEventListener("click", function () { sendServoMode("manual"); });
+  updateCloudState();
+  setInterval(function () {
+    clock();
+    render(data);
+    updateCloudState();
+  }, 1000);
   connectMqtt();
 </script>
 </body>
